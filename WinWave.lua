@@ -13,19 +13,29 @@ local pedestalRemote = ReplicatedStorage
 	:WaitForChild("Pedestals")
 	:WaitForChild("ClaimPedestalIncome")
 
+-- USING EXACT NAMES FROM YOUR ORIGINAL CODE
+local rarityColors = {
+	Rare = Color3.fromRGB(0, 200, 0),
+	Epic = Color3.fromRGB(150, 0, 200),
+	Mythical = Color3.fromRGB(255, 100, 200),
+	Divine = "rainbow",
+	Celestial = "glow_yellow",
+	Secret = "glow_black"
+}
+
 local rarities = {
 	{name = "Rare", units = { "Barbarini", "Archerini" }},
-	{name = "Epic", units = { "Knighty", "Dart Goblini", "Musketeeri" }},
+	{name = "Epic", units = { "Knighty", "DartGoblini", "Musketeeri" }},
 	{name = "Mythical", units = { "Valkerius", "Wizarderes" }},
-	{name = "Divine", units = { "Mini Pekku", "Witchu" }},
+	{name = "Divine", units = { "MiniPekku", "Witchu" }},
 	{name = "Celestial", units = { "Golem", "Bowlerini" }},
-	{name = "Secret", units = { "Electro Wizard", "Sparky", "Pekka", "Royal Ghosty" }}
+	{name = "Secret", units = { "ElectroWizard", "Sparky", "Pekka", "RoyalGhosty" }}
 }
 
 local units = {}
 for _, rarity in ipairs(rarities) do
 	for _, name in ipairs(rarity.units) do
-		units[name] = true
+		units[name] = false -- CHANGED: Default to OFF
 	end
 end
 
@@ -39,15 +49,18 @@ local nextBuyTime = 0
 
 local function buyAllUnits()
 	print("=== Starting buy attempt ===")
+	print("Checking unit shop for selected units...")
+	
 	for unit, active in pairs(units) do
 		if active and not bought[unit] then
-			print("Buying unit:", unit)
+			print("Attempting to buy unit:", unit)
 			-- Try to buy multiple times to get all stock
 			for i = 1, 20 do
 				task.spawn(function()
 					local success, err = pcall(function()
 						local args = {unit}
 						buyRemote:FireServer(unpack(args))
+						print("Sent buy request for:", unit)
 					end)
 					if not success then
 						print("Failed attempt " .. i .. " for " .. unit .. ":", err)
@@ -66,8 +79,15 @@ task.spawn(function()
 		if enabled then
 			print("Auto-buy enabled, buying now...")
 			buyAllUnits()
+			print("Waiting 5 minutes until next buy...")
 			nextBuyTime = os.time() + 300
-			task.wait(300) -- 5 minutes
+			
+			-- Wait for 5 minutes OR until disabled
+			local waited = 0
+			while waited < 300 and enabled and not stopped do
+				task.wait(1)
+				waited = waited + 1
+			end
 		else
 			task.wait(1)
 		end
@@ -159,14 +179,14 @@ header.BorderSizePixel = 0
 Instance.new("UICorner", header).CornerRadius = UDim.new(0, 12)
 
 local brandLabel = Instance.new("TextLabel", header)
-brandLabel.Size = UDim2.fromOffset(200, 45)
-brandLabel.Position = UDim2.fromOffset(10, 0)
-brandLabel.Text = "Xisoun"
+brandLabel.Size = UDim2.fromOffset(700, 45)
+brandLabel.Position = UDim2.fromOffset(0, 0)
+brandLabel.Text = "TestHub"
 brandLabel.Font = Enum.Font.GothamBold
 brandLabel.TextSize = 24
 brandLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
 brandLabel.BackgroundTransparency = 1
-brandLabel.TextXAlignment = Enum.TextXAlignment.Left
+brandLabel.TextXAlignment = Enum.TextXAlignment.Center
 
 local closeBtn = Instance.new("TextButton", header)
 closeBtn.Size = UDim2.fromOffset(35, 35)
@@ -241,9 +261,9 @@ buyScroll.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 80)
 buyScroll.CanvasSize = UDim2.fromOffset(0, 0)
 
 local buyLayout = Instance.new("UIListLayout", buyScroll)
-buyLayout.Padding = UDim.new(0, 4)
+buyLayout.Padding = UDim.new(0, 8)
 buyLayout.SortOrder = Enum.SortOrder.LayoutOrder
-buyLayout.FillDirection = Enum.FillDirection.Horizontal
+buyLayout.FillDirection = Enum.FillDirection.Vertical
 buyLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 
 local function button(text, parent, color, width)
@@ -260,7 +280,7 @@ end
 
 -- Control section
 local buyControlFrame = Instance.new("Frame", buyScroll)
-buyControlFrame.Size = UDim2.fromOffset(200, 80)
+buyControlFrame.Size = UDim2.fromOffset(600, 50)
 buyControlFrame.BackgroundTransparency = 1
 buyControlFrame.LayoutOrder = 1
 
@@ -300,27 +320,96 @@ toggleBtn.MouseButton1Click:Connect(function()
 	toggleBtn.Text = enabled and "STOP AUTO BUY" or "START AUTO BUY"
 	toggleBtn.BackgroundColor3 = enabled and Color3.fromRGB(170,0,0) or Color3.fromRGB(0,170,0)
 	cubeIcon.BackgroundColor3 = enabled and Color3.fromRGB(0,170,0) or Color3.fromRGB(60,60,60)
+	
+	if not enabled then
+		nextBuyTime = 0
+	end
 end)
 
 local order = 2
 for _, rarity in ipairs(rarities) do
 	local rarityContainer = Instance.new("Frame", buyScroll)
-	rarityContainer.Size = UDim2.fromOffset(140, 80)
+	rarityContainer.Size = UDim2.fromOffset(600, 40)
 	rarityContainer.BackgroundTransparency = 1
 	rarityContainer.LayoutOrder = order
 	order += 1
 
-	local header = button(rarity.name .. " ▸", rarityContainer, Color3.fromRGB(60,60,60), 130)
+	-- Get rarity color
+	local rarityColor = rarityColors[rarity.name]
+	local isSpecialColor = type(rarityColor) == "string"
+	local buttonColor = isSpecialColor and Color3.fromRGB(60,60,60) or rarityColor
+	
+	local header = button(rarity.name .. " ▸", rarityContainer, buttonColor, 490)
 	header.Position = UDim2.fromOffset(5, 5)
+	
+	-- Add special effects for rainbow/glow colors
+	if rarityColor == "rainbow" then
+		task.spawn(function()
+			while not stopped do
+				local hue = (tick() % 5) / 5
+				header.BackgroundColor3 = Color3.fromHSV(hue, 1, 1)
+				task.wait(0.05)
+			end
+		end)
+	elseif rarityColor == "glow_yellow" then
+		task.spawn(function()
+			while not stopped do
+				local brightness = 0.5 + math.sin(tick() * 3) * 0.3
+				header.BackgroundColor3 = Color3.fromRGB(255 * brightness, 255 * brightness, 0)
+				task.wait(0.05)
+			end
+		end)
+	elseif rarityColor == "glow_black" then
+		task.spawn(function()
+			while not stopped do
+				local brightness = 0.3 + math.sin(tick() * 3) * 0.2
+				header.BackgroundColor3 = Color3.fromRGB(255 * brightness, 255 * brightness, 255 * brightness)
+				task.wait(0.05)
+			end
+		end)
+	end
+	
+	-- Add "Buy All" checkbox
+	local buyAllCheckbox = Instance.new("TextButton", rarityContainer)
+	buyAllCheckbox.Size = UDim2.fromOffset(90, 34)
+	buyAllCheckbox.Position = UDim2.fromOffset(500, 5)
+	buyAllCheckbox.Text = "Buy All: OFF"
+	buyAllCheckbox.Font = Enum.Font.GothamBold
+	buyAllCheckbox.TextSize = 11
+	buyAllCheckbox.TextColor3 = Color3.new(1,1,1)
+	buyAllCheckbox.BackgroundColor3 = Color3.fromRGB(90,90,90)
+	Instance.new("UICorner", buyAllCheckbox).CornerRadius = UDim.new(0, 8)
+	
+	local buyAllEnabled = false
+	buyAllCheckbox.MouseButton1Click:Connect(function()
+		buyAllEnabled = not buyAllEnabled
+		buyAllCheckbox.Text = "Buy All: " .. (buyAllEnabled and "ON" or "OFF")
+		buyAllCheckbox.BackgroundColor3 = buyAllEnabled and Color3.fromRGB(0,170,0) or Color3.fromRGB(90,90,90)
+		
+		-- Toggle all units in this rarity
+		for _, unit in ipairs(rarity.units) do
+			units[unit] = buyAllEnabled
+		end
+		
+		-- Update all unit buttons in this rarity
+		for _, child in ipairs(dropdown:GetChildren()) do
+			if child:IsA("TextButton") then
+				local unitName = child.Text:match("(.+):")
+				if units[unitName] ~= nil then
+					child.Text = unitName .. (units[unitName] and ": ON" or ": OFF")
+					child.BackgroundColor3 = units[unitName] and Color3.fromRGB(0,120,255) or Color3.fromRGB(90,90,90)
+				end
+			end
+		end
+	end)
 
 	local dropdown = Instance.new("Frame", rarityContainer)
-	dropdown.Size = UDim2.fromOffset(130, 0)
+	dropdown.Size = UDim2.fromOffset(590, 0)
 	dropdown.Position = UDim2.fromOffset(5, 43)
 	dropdown.BackgroundColor3 = Color3.fromRGB(30,30,30)
 	dropdown.BorderSizePixel = 0
 	dropdown.Visible = false
 	dropdown.ClipsDescendants = true
-	dropdown.ZIndex = 10
 	Instance.new("UICorner", dropdown).CornerRadius = UDim.new(0, 8)
 
 	local dropdownLayout = Instance.new("UIListLayout", dropdown)
@@ -334,8 +423,16 @@ for _, rarity in ipairs(rarities) do
 		
 		if open then
 			dropdown.Visible = true
+			local dropdownHeight = (#rarity.units * 28) + 4
 			dropdown:TweenSize(
-				UDim2.fromOffset(130, (#rarity.units * 28) + 4),
+				UDim2.fromOffset(590, dropdownHeight),
+				Enum.EasingDirection.Out,
+				Enum.EasingStyle.Quad,
+				0.2,
+				true
+			)
+			rarityContainer:TweenSize(
+				UDim2.fromOffset(600, 43 + dropdownHeight + 5),
 				Enum.EasingDirection.Out,
 				Enum.EasingStyle.Quad,
 				0.2,
@@ -343,7 +440,7 @@ for _, rarity in ipairs(rarities) do
 			)
 		else
 			dropdown:TweenSize(
-				UDim2.fromOffset(130, 0),
+				UDim2.fromOffset(590, 0),
 				Enum.EasingDirection.Out,
 				Enum.EasingStyle.Quad,
 				0.2,
@@ -352,17 +449,24 @@ for _, rarity in ipairs(rarities) do
 					dropdown.Visible = false
 				end
 			)
+			rarityContainer:TweenSize(
+				UDim2.fromOffset(600, 40),
+				Enum.EasingDirection.Out,
+				Enum.EasingStyle.Quad,
+				0.2,
+				true
+			)
 		end
 	end)
 
 	for idx, unit in ipairs(rarity.units) do
 		local ub = Instance.new("TextButton", dropdown)
-		ub.Size = UDim2.fromOffset(126, 26)
-		ub.Text = unit .. ": ON"
+		ub.Size = UDim2.fromOffset(586, 26)
+		ub.Text = unit .. ": OFF" -- CHANGED: Default to OFF
 		ub.Font = Enum.Font.GothamBold
 		ub.TextSize = 11
 		ub.TextColor3 = Color3.new(1,1,1)
-		ub.BackgroundColor3 = Color3.fromRGB(0,120,255)
+		ub.BackgroundColor3 = Color3.fromRGB(90,90,90) -- CHANGED: Default gray
 		ub.LayoutOrder = idx
 		Instance.new("UICorner", ub).CornerRadius = UDim.new(0, 6)
 		
@@ -374,9 +478,9 @@ for _, rarity in ipairs(rarities) do
 	end
 end
 
-buyScroll.CanvasSize = UDim2.fromOffset(buyLayout.AbsoluteContentSize.X, 0)
+buyScroll.CanvasSize = UDim2.fromOffset(0, buyLayout.AbsoluteContentSize.Y)
 buyLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-	buyScroll.CanvasSize = UDim2.fromOffset(buyLayout.AbsoluteContentSize.X, 0)
+	buyScroll.CanvasSize = UDim2.fromOffset(0, buyLayout.AbsoluteContentSize.Y)
 end)
 
 -- AUTO COLLECT PANEL
