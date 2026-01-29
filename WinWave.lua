@@ -13,7 +13,6 @@ local pedestalRemote = ReplicatedStorage
 	:WaitForChild("Pedestals")
 	:WaitForChild("ClaimPedestalIncome")
 
--- USING EXACT NAMES FROM YOUR ORIGINAL CODE
 local rarityColors = {
 	Rare = Color3.fromRGB(0, 200, 0),
 	Epic = Color3.fromRGB(150, 0, 200),
@@ -33,9 +32,11 @@ local rarities = {
 }
 
 local units = {}
+local unitButtons = {}
 for _, rarity in ipairs(rarities) do
 	for _, name in ipairs(rarity.units) do
-		units[name] = false -- CHANGED: Default to OFF
+		units[name] = false
+		unitButtons[name] = nil
 	end
 end
 
@@ -54,7 +55,6 @@ local function buyAllUnits()
 	for unit, active in pairs(units) do
 		if active and not bought[unit] then
 			print("Attempting to buy unit:", unit)
-			-- Try to buy multiple times to get all stock
 			for i = 1, 20 do
 				task.spawn(function()
 					local success, err = pcall(function()
@@ -82,7 +82,6 @@ task.spawn(function()
 			print("Waiting 5 minutes until next buy...")
 			nextBuyTime = os.time() + 300
 			
-			-- Wait for 5 minutes OR until disabled
 			local waited = 0
 			while waited < 300 and enabled and not stopped do
 				task.wait(1)
@@ -99,6 +98,7 @@ task.spawn(function()
 	while not stopped do
 		if pedestalEnabled then
 			print("Auto-collect enabled, collecting now...")
+			print("Using interval:", collectInterval, "seconds")
 			for i = 1, 15 do
 				task.spawn(function()
 					pcall(function()
@@ -108,7 +108,12 @@ task.spawn(function()
 				task.wait(0.15)
 			end
 			nextCollectTime = os.time() + collectInterval
-			task.wait(collectInterval)
+			
+			local waited = 0
+			while waited < collectInterval and pedestalEnabled and not stopped do
+				task.wait(1)
+				waited = waited + 1
+			end
 		else
 			task.wait(1)
 		end
@@ -124,6 +129,11 @@ task.spawn(function()
 			print("Successfully bought:", child.Name)
 			bought[child.Name] = true
 			units[child.Name] = false
+			
+			if unitButtons[child.Name] then
+				unitButtons[child.Name].Text = child.Name .. ": OFF"
+				unitButtons[child.Name].BackgroundColor3 = Color3.fromRGB(90,90,90)
+			end
 		end
 	end)
 end)
@@ -134,14 +144,18 @@ gui.Parent = player:WaitForChild("PlayerGui")
 
 -- MAIN CONTAINER
 local mainFrame = Instance.new("Frame", gui)
-mainFrame.Size = UDim2.fromOffset(700, 260)
-mainFrame.Position = UDim2.fromScale(0.5, 0.02)
-mainFrame.AnchorPoint = Vector2.new(0.5, 0)
+mainFrame.Size = UDim2.fromOffset(750, 400)
+mainFrame.Position = UDim2.fromScale(0.5, 0.5)
+mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 mainFrame.BorderSizePixel = 0
+mainFrame.ClipsDescendants = true
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
 
--- Make mainFrame draggable
+local minimized = false
+local originalSize = mainFrame.Size
+
+-- DRAGGING
 local dragging, dragInput, dragStart, startPos
 
 mainFrame.InputBegan:Connect(function(input)
@@ -171,26 +185,36 @@ game:GetService("UserInputService").InputChanged:Connect(function(input)
 	end
 end)
 
--- HEADER WITH XISOUN BRANDING
+-- HEADER
 local header = Instance.new("Frame", mainFrame)
-header.Size = UDim2.fromOffset(700, 45)
+header.Size = UDim2.fromOffset(750, 50)
 header.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 header.BorderSizePixel = 0
 Instance.new("UICorner", header).CornerRadius = UDim.new(0, 12)
 
 local brandLabel = Instance.new("TextLabel", header)
-brandLabel.Size = UDim2.fromOffset(700, 45)
-brandLabel.Position = UDim2.fromOffset(0, 0)
+brandLabel.Size = UDim2.fromOffset(600, 50)
+brandLabel.Position = UDim2.fromOffset(10, 0)
 brandLabel.Text = "TestHub"
 brandLabel.Font = Enum.Font.GothamBold
-brandLabel.TextSize = 24
+brandLabel.TextSize = 26
 brandLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
 brandLabel.BackgroundTransparency = 1
-brandLabel.TextXAlignment = Enum.TextXAlignment.Center
+brandLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local minimizeBtn = Instance.new("TextButton", header)
+minimizeBtn.Size = UDim2.fromOffset(40, 40)
+minimizeBtn.Position = UDim2.fromOffset(655, 5)
+minimizeBtn.Text = "—"
+minimizeBtn.Font = Enum.Font.GothamBold
+minimizeBtn.TextSize = 20
+minimizeBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 0)
+minimizeBtn.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", minimizeBtn).CornerRadius = UDim.new(0, 8)
 
 local closeBtn = Instance.new("TextButton", header)
-closeBtn.Size = UDim2.fromOffset(35, 35)
-closeBtn.Position = UDim2.fromOffset(655, 5)
+closeBtn.Size = UDim2.fromOffset(40, 40)
+closeBtn.Position = UDim2.fromOffset(700, 5)
 closeBtn.Text = "❌"
 closeBtn.Font = Enum.Font.GothamBold
 closeBtn.TextSize = 18
@@ -205,94 +229,164 @@ closeBtn.MouseButton1Click:Connect(function()
 	gui:Destroy()
 end)
 
--- ICON SIDEBAR (Vertical on left)
+-- ICON SIDEBAR
 local iconBar = Instance.new("Frame", mainFrame)
-iconBar.Size = UDim2.fromOffset(50, 205)
-iconBar.Position = UDim2.fromOffset(5, 50)
+iconBar.Size = UDim2.fromOffset(60, 340)
+iconBar.Position = UDim2.fromOffset(5, 55)
 iconBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 iconBar.BorderSizePixel = 0
 Instance.new("UICorner", iconBar).CornerRadius = UDim.new(0, 10)
 
 local function createIcon(emoji, y, color)
 	local icon = Instance.new("TextButton", iconBar)
-	icon.Size = UDim2.fromOffset(40, 40)
+	icon.Size = UDim2.fromOffset(50, 50)
 	icon.Position = UDim2.fromOffset(5, y)
 	icon.Text = emoji
 	icon.Font = Enum.Font.GothamBold
-	icon.TextSize = 22
+	icon.TextSize = 24
 	icon.BackgroundColor3 = color
 	icon.TextColor3 = Color3.new(1,1,1)
-	Instance.new("UICorner", icon).CornerRadius = UDim.new(0, 8)
+	Instance.new("UICorner", icon).CornerRadius = UDim.new(0, 10)
 	return icon
 end
 
 local cubeIcon = createIcon("📦", 10, Color3.fromRGB(60,60,60))
-local cashIcon = createIcon("💰", 60, Color3.fromRGB(60,60,60))
+local cashIcon = createIcon("💰", 70, Color3.fromRGB(60,60,60))
 
--- CONTENT CONTAINER (Right side)
+-- CONTENT CONTAINER
 local contentFrame = Instance.new("Frame", mainFrame)
-contentFrame.Size = UDim2.fromOffset(630, 205)
-contentFrame.Position = UDim2.fromOffset(60, 50)
+contentFrame.Size = UDim2.fromOffset(680, 345)
+contentFrame.Position = UDim2.fromOffset(70, 55)
 contentFrame.BackgroundTransparency = 1
 contentFrame.BorderSizePixel = 0
 contentFrame.ClipsDescendants = true
 
+-- RESIZE HANDLE
+local resizeHandle = Instance.new("TextButton", mainFrame)
+resizeHandle.Size = UDim2.fromOffset(20, 20)
+resizeHandle.Position = UDim2.new(1, -20, 1, -20)
+resizeHandle.Text = "⬀"
+resizeHandle.Font = Enum.Font.GothamBold
+resizeHandle.TextSize = 16
+resizeHandle.TextColor3 = Color3.fromRGB(150,150,150)
+resizeHandle.BackgroundTransparency = 1
+resizeHandle.ZIndex = 10
+
+local resizing = false
+local resizeStart, sizeStart
+
+resizeHandle.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		resizing = true
+		resizeStart = input.Position
+		sizeStart = mainFrame.Size
+		
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				resizing = false
+			end
+		end)
+	end
+end)
+
+game:GetService("UserInputService").InputChanged:Connect(function(input)
+	if resizing and input.UserInputType == Enum.UserInputType.MouseMovement then
+		local delta = input.Position - resizeStart
+		local newWidth = math.max(600, sizeStart.X.Offset + delta.X)
+		local newHeight = math.max(300, sizeStart.Y.Offset + delta.Y)
+		mainFrame.Size = UDim2.fromOffset(newWidth, newHeight)
+		originalSize = mainFrame.Size
+		
+		-- Update content sizes
+		header.Size = UDim2.fromOffset(newWidth, 50)
+		brandLabel.Size = UDim2.fromOffset(newWidth - 150, 50)
+		iconBar.Size = UDim2.fromOffset(60, newHeight - 60)
+		contentFrame.Size = UDim2.fromOffset(newWidth - 70, newHeight - 55)
+		buyPanel.Size = UDim2.fromOffset(newWidth - 70, newHeight - 55)
+		collectPanel.Size = UDim2.fromOffset(newWidth - 70, newHeight - 55)
+		buyScroll.Size = UDim2.fromOffset(newWidth - 80, newHeight - 100)
+	end
+end)
+
+minimizeBtn.MouseButton1Click:Connect(function()
+	minimized = not minimized
+	if minimized then
+		-- Store original size before minimizing
+		originalSize = mainFrame.Size
+		-- Hide all content
+		iconBar.Visible = false
+		contentFrame.Visible = false
+		resizeHandle.Visible = false
+		-- Shrink to header only
+		mainFrame:TweenSize(UDim2.fromOffset(mainFrame.Size.X.Offset, 50), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
+		minimizeBtn.Text = "□"
+	else
+		-- Restore to original size
+		mainFrame:TweenSize(originalSize, Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.3, true)
+		-- Show all content
+		iconBar.Visible = true
+		contentFrame.Visible = true
+		resizeHandle.Visible = true
+		minimizeBtn.Text = "—"
+	end
+end)
+
 -- AUTO BUY PANEL
 local buyPanel = Instance.new("Frame", contentFrame)
-buyPanel.Size = UDim2.fromOffset(630, 205)
+buyPanel.Size = UDim2.fromOffset(680, 345)
 buyPanel.BackgroundTransparency = 1
 buyPanel.Visible = false
 
 local buyTitle = Instance.new("TextLabel", buyPanel)
-buyTitle.Size = UDim2.fromOffset(630, 30)
+buyTitle.Size = UDim2.fromOffset(680, 35)
 buyTitle.Text = "AUTO BUY UNITS"
 buyTitle.Font = Enum.Font.GothamBold
-buyTitle.TextSize = 18
+buyTitle.TextSize = 20
 buyTitle.TextColor3 = Color3.new(1,1,1)
 buyTitle.BackgroundTransparency = 1
 
 local buyScroll = Instance.new("ScrollingFrame", buyPanel)
-buyScroll.Size = UDim2.fromOffset(620, 165)
-buyScroll.Position = UDim2.fromOffset(5, 35)
+buyScroll.Size = UDim2.fromOffset(670, 300)
+buyScroll.Position = UDim2.fromOffset(5, 40)
 buyScroll.BackgroundTransparency = 1
 buyScroll.BorderSizePixel = 0
-buyScroll.ScrollBarThickness = 6
+buyScroll.ScrollBarThickness = 8
 buyScroll.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 80)
 buyScroll.CanvasSize = UDim2.fromOffset(0, 0)
 
 local buyLayout = Instance.new("UIListLayout", buyScroll)
-buyLayout.Padding = UDim.new(0, 8)
+buyLayout.Padding = UDim.new(0, 12)
 buyLayout.SortOrder = Enum.SortOrder.LayoutOrder
 buyLayout.FillDirection = Enum.FillDirection.Vertical
 buyLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 
 local function button(text, parent, color, width)
 	local b = Instance.new("TextButton", parent)
-	b.Size = UDim2.fromOffset(width or 180, 34)
+	b.Size = UDim2.fromOffset(width or 180, 38)
 	b.Text = text
 	b.Font = Enum.Font.GothamBold
-	b.TextSize = 13
+	b.TextSize = 14
 	b.TextColor3 = Color3.new(1,1,1)
 	b.BackgroundColor3 = color
-	Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
+	Instance.new("UICorner", b).CornerRadius = UDim.new(0, 10)
 	return b
 end
 
 -- Control section
 local buyControlFrame = Instance.new("Frame", buyScroll)
-buyControlFrame.Size = UDim2.fromOffset(600, 50)
+buyControlFrame.Size = UDim2.fromOffset(650, 60)
 buyControlFrame.BackgroundTransparency = 1
 buyControlFrame.LayoutOrder = 1
 
-local toggleBtn = button("START AUTO BUY", buyControlFrame, Color3.fromRGB(0,170,0), 190)
-toggleBtn.Position = UDim2.fromOffset(5, 5)
+local toggleBtn = button("START AUTO BUY", buyControlFrame, Color3.fromRGB(0,170,0), 200)
+toggleBtn.Position = UDim2.fromOffset(10, 5)
 
 local buyCountdownLabel = Instance.new("TextLabel", buyControlFrame)
-buyCountdownLabel.Size = UDim2.fromOffset(190, 20)
-buyCountdownLabel.Position = UDim2.fromOffset(5, 45)
+buyCountdownLabel.Size = UDim2.fromOffset(200, 22)
+buyCountdownLabel.Position = UDim2.fromOffset(10, 50)
 buyCountdownLabel.Text = "Next buy in: --"
 buyCountdownLabel.Font = Enum.Font.Gotham
-buyCountdownLabel.TextSize = 11
+buyCountdownLabel.TextSize = 12
 buyCountdownLabel.TextColor3 = Color3.fromRGB(150,150,150)
 buyCountdownLabel.BackgroundTransparency = 1
 
@@ -329,7 +423,7 @@ end)
 local order = 2
 for _, rarity in ipairs(rarities) do
 	local rarityContainer = Instance.new("Frame", buyScroll)
-	rarityContainer.Size = UDim2.fromOffset(600, 40)
+	rarityContainer.Size = UDim2.fromOffset(650, 50)
 	rarityContainer.BackgroundTransparency = 1
 	rarityContainer.LayoutOrder = order
 	order += 1
@@ -339,8 +433,8 @@ for _, rarity in ipairs(rarities) do
 	local isSpecialColor = type(rarityColor) == "string"
 	local buttonColor = isSpecialColor and Color3.fromRGB(60,60,60) or rarityColor
 	
-	local header = button(rarity.name .. " ▸", rarityContainer, buttonColor, 490)
-	header.Position = UDim2.fromOffset(5, 5)
+	local header = button(rarity.name .. " ▸", rarityContainer, buttonColor, 450)
+	header.Position = UDim2.fromOffset(10, 5)
 	
 	-- Add special effects for rainbow/glow colors
 	if rarityColor == "rainbow" then
@@ -369,16 +463,29 @@ for _, rarity in ipairs(rarities) do
 		end)
 	end
 	
-	-- Add "Buy All" checkbox
+	local dropdown = Instance.new("Frame", rarityContainer)
+	dropdown.Size = UDim2.fromOffset(640, 0)
+	dropdown.Position = UDim2.fromOffset(10, 53)
+	dropdown.BackgroundColor3 = Color3.fromRGB(30,30,30)
+	dropdown.BorderSizePixel = 0
+	dropdown.Visible = false
+	dropdown.ClipsDescendants = true
+	Instance.new("UICorner", dropdown).CornerRadius = UDim.new(0, 10)
+
+	local dropdownLayout = Instance.new("UIListLayout", dropdown)
+	dropdownLayout.Padding = UDim.new(0, 3)
+	dropdownLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	
+	-- Buy All checkbox - better positioned
 	local buyAllCheckbox = Instance.new("TextButton", rarityContainer)
-	buyAllCheckbox.Size = UDim2.fromOffset(90, 34)
-	buyAllCheckbox.Position = UDim2.fromOffset(500, 5)
+	buyAllCheckbox.Size = UDim2.fromOffset(170, 38)
+	buyAllCheckbox.Position = UDim2.fromOffset(470, 5)
 	buyAllCheckbox.Text = "Buy All: OFF"
 	buyAllCheckbox.Font = Enum.Font.GothamBold
-	buyAllCheckbox.TextSize = 11
+	buyAllCheckbox.TextSize = 13
 	buyAllCheckbox.TextColor3 = Color3.new(1,1,1)
 	buyAllCheckbox.BackgroundColor3 = Color3.fromRGB(90,90,90)
-	Instance.new("UICorner", buyAllCheckbox).CornerRadius = UDim.new(0, 8)
+	Instance.new("UICorner", buyAllCheckbox).CornerRadius = UDim.new(0, 10)
 	
 	local buyAllEnabled = false
 	buyAllCheckbox.MouseButton1Click:Connect(function()
@@ -386,35 +493,15 @@ for _, rarity in ipairs(rarities) do
 		buyAllCheckbox.Text = "Buy All: " .. (buyAllEnabled and "ON" or "OFF")
 		buyAllCheckbox.BackgroundColor3 = buyAllEnabled and Color3.fromRGB(0,170,0) or Color3.fromRGB(90,90,90)
 		
-		-- Toggle all units in this rarity
 		for _, unit in ipairs(rarity.units) do
 			units[unit] = buyAllEnabled
-		end
-		
-		-- Update all unit buttons in this rarity
-		for _, child in ipairs(dropdown:GetChildren()) do
-			if child:IsA("TextButton") then
-				local unitName = child.Text:match("(.+):")
-				if units[unitName] ~= nil then
-					child.Text = unitName .. (units[unitName] and ": ON" or ": OFF")
-					child.BackgroundColor3 = units[unitName] and Color3.fromRGB(0,120,255) or Color3.fromRGB(90,90,90)
-				end
+			
+			if unitButtons[unit] then
+				unitButtons[unit].Text = unit .. (buyAllEnabled and ": ON" or ": OFF")
+				unitButtons[unit].BackgroundColor3 = buyAllEnabled and Color3.fromRGB(0,120,255) or Color3.fromRGB(90,90,90)
 			end
 		end
 	end)
-
-	local dropdown = Instance.new("Frame", rarityContainer)
-	dropdown.Size = UDim2.fromOffset(590, 0)
-	dropdown.Position = UDim2.fromOffset(5, 43)
-	dropdown.BackgroundColor3 = Color3.fromRGB(30,30,30)
-	dropdown.BorderSizePixel = 0
-	dropdown.Visible = false
-	dropdown.ClipsDescendants = true
-	Instance.new("UICorner", dropdown).CornerRadius = UDim.new(0, 8)
-
-	local dropdownLayout = Instance.new("UIListLayout", dropdown)
-	dropdownLayout.Padding = UDim.new(0, 2)
-	dropdownLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
 	local open = false
 	header.MouseButton1Click:Connect(function()
@@ -423,37 +510,37 @@ for _, rarity in ipairs(rarities) do
 		
 		if open then
 			dropdown.Visible = true
-			local dropdownHeight = (#rarity.units * 28) + 4
+			local dropdownHeight = (#rarity.units * 33) + 6
 			dropdown:TweenSize(
-				UDim2.fromOffset(590, dropdownHeight),
+				UDim2.fromOffset(640, dropdownHeight),
 				Enum.EasingDirection.Out,
 				Enum.EasingStyle.Quad,
-				0.2,
+				0.25,
 				true
 			)
 			rarityContainer:TweenSize(
-				UDim2.fromOffset(600, 43 + dropdownHeight + 5),
+				UDim2.fromOffset(650, 53 + dropdownHeight + 8),
 				Enum.EasingDirection.Out,
 				Enum.EasingStyle.Quad,
-				0.2,
+				0.25,
 				true
 			)
 		else
 			dropdown:TweenSize(
-				UDim2.fromOffset(590, 0),
+				UDim2.fromOffset(640, 0),
 				Enum.EasingDirection.Out,
 				Enum.EasingStyle.Quad,
-				0.2,
+				0.25,
 				true,
 				function()
 					dropdown.Visible = false
 				end
 			)
 			rarityContainer:TweenSize(
-				UDim2.fromOffset(600, 40),
+				UDim2.fromOffset(650, 50),
 				Enum.EasingDirection.Out,
 				Enum.EasingStyle.Quad,
-				0.2,
+				0.25,
 				true
 			)
 		end
@@ -461,14 +548,16 @@ for _, rarity in ipairs(rarities) do
 
 	for idx, unit in ipairs(rarity.units) do
 		local ub = Instance.new("TextButton", dropdown)
-		ub.Size = UDim2.fromOffset(586, 26)
-		ub.Text = unit .. ": OFF" -- CHANGED: Default to OFF
+		ub.Size = UDim2.fromOffset(630, 30)
+		ub.Text = unit .. ": OFF"
 		ub.Font = Enum.Font.GothamBold
-		ub.TextSize = 11
+		ub.TextSize = 12
 		ub.TextColor3 = Color3.new(1,1,1)
-		ub.BackgroundColor3 = Color3.fromRGB(90,90,90) -- CHANGED: Default gray
+		ub.BackgroundColor3 = Color3.fromRGB(90,90,90)
 		ub.LayoutOrder = idx
-		Instance.new("UICorner", ub).CornerRadius = UDim.new(0, 6)
+		Instance.new("UICorner", ub).CornerRadius = UDim.new(0, 8)
+		
+		unitButtons[unit] = ub
 		
 		ub.MouseButton1Click:Connect(function()
 			units[unit] = not units[unit]
@@ -485,55 +574,59 @@ end)
 
 -- AUTO COLLECT PANEL
 local collectPanel = Instance.new("Frame", contentFrame)
-collectPanel.Size = UDim2.fromOffset(630, 205)
+collectPanel.Size = UDim2.fromOffset(680, 345)
 collectPanel.BackgroundTransparency = 1
 collectPanel.Visible = false
 
 local collectTitle = Instance.new("TextLabel", collectPanel)
-collectTitle.Size = UDim2.fromOffset(630, 30)
+collectTitle.Size = UDim2.fromOffset(680, 35)
 collectTitle.Text = "AUTO COLLECT MONEY"
 collectTitle.Font = Enum.Font.GothamBold
-collectTitle.TextSize = 18
+collectTitle.TextSize = 20
 collectTitle.TextColor3 = Color3.new(1,1,1)
 collectTitle.BackgroundTransparency = 1
 
 local collectContent = Instance.new("Frame", collectPanel)
-collectContent.Size = UDim2.fromOffset(400, 150)
-collectContent.Position = UDim2.fromOffset(115, 40)
+collectContent.Size = UDim2.fromOffset(500, 200)
+collectContent.Position = UDim2.fromOffset(90, 80)
 collectContent.BackgroundTransparency = 1
 
 local toggleCollectBtn = Instance.new("TextButton", collectContent)
-toggleCollectBtn.Size = UDim2.fromOffset(380, 40)
+toggleCollectBtn.Size = UDim2.fromOffset(480, 45)
 toggleCollectBtn.Position = UDim2.fromOffset(10, 10)
 toggleCollectBtn.Text = "START AUTO COLLECT"
 toggleCollectBtn.Font = Enum.Font.GothamBold
-toggleCollectBtn.TextSize = 15
+toggleCollectBtn.TextSize = 16
 toggleCollectBtn.TextColor3 = Color3.new(1,1,1)
 toggleCollectBtn.BackgroundColor3 = Color3.fromRGB(0,170,0)
-Instance.new("UICorner", toggleCollectBtn).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", toggleCollectBtn).CornerRadius = UDim.new(0, 10)
 
 toggleCollectBtn.MouseButton1Click:Connect(function()
 	pedestalEnabled = not pedestalEnabled
 	toggleCollectBtn.Text = pedestalEnabled and "STOP AUTO COLLECT" or "START AUTO COLLECT"
 	toggleCollectBtn.BackgroundColor3 = pedestalEnabled and Color3.fromRGB(170,0,0) or Color3.fromRGB(0,170,0)
 	cashIcon.BackgroundColor3 = pedestalEnabled and Color3.fromRGB(170,170,0) or Color3.fromRGB(60,60,60)
+	
+	if not pedestalEnabled then
+		nextCollectTime = 0
+	end
 end)
 
 local sliderLabel = Instance.new("TextLabel", collectContent)
-sliderLabel.Size = UDim2.fromOffset(380, 20)
-sliderLabel.Position = UDim2.fromOffset(10, 60)
+sliderLabel.Size = UDim2.fromOffset(480, 25)
+sliderLabel.Position = UDim2.fromOffset(10, 70)
 sliderLabel.Text = "Collect Interval: 1 minute"
 sliderLabel.Font = Enum.Font.GothamBold
-sliderLabel.TextSize = 13
+sliderLabel.TextSize = 14
 sliderLabel.TextColor3 = Color3.new(1,1,1)
 sliderLabel.BackgroundTransparency = 1
 
 local countdownLabel = Instance.new("TextLabel", collectContent)
-countdownLabel.Size = UDim2.fromOffset(380, 15)
-countdownLabel.Position = UDim2.fromOffset(10, 78)
+countdownLabel.Size = UDim2.fromOffset(480, 20)
+countdownLabel.Position = UDim2.fromOffset(10, 92)
 countdownLabel.Text = "Next collect in: --"
 countdownLabel.Font = Enum.Font.Gotham
-countdownLabel.TextSize = 11
+countdownLabel.TextSize = 12
 countdownLabel.TextColor3 = Color3.fromRGB(150,150,150)
 countdownLabel.BackgroundTransparency = 1
 
@@ -557,8 +650,8 @@ task.spawn(function()
 end)
 
 local sliderBg = Instance.new("Frame", collectContent)
-sliderBg.Size = UDim2.fromOffset(380, 10)
-sliderBg.Position = UDim2.fromOffset(10, 105)
+sliderBg.Size = UDim2.fromOffset(480, 12)
+sliderBg.Position = UDim2.fromOffset(10, 125)
 sliderBg.BackgroundColor3 = Color3.fromRGB(50,50,50)
 Instance.new("UICorner", sliderBg).CornerRadius = UDim.new(1, 0)
 
@@ -569,7 +662,7 @@ sliderFill.BorderSizePixel = 0
 Instance.new("UICorner", sliderFill).CornerRadius = UDim.new(1, 0)
 
 local sliderKnob = Instance.new("TextButton", sliderBg)
-sliderKnob.Size = UDim2.fromOffset(20, 20)
+sliderKnob.Size = UDim2.fromOffset(24, 24)
 sliderKnob.Position = UDim2.fromScale(0, 0.5)
 sliderKnob.AnchorPoint = Vector2.new(0.5, 0.5)
 sliderKnob.Text = ""
@@ -596,7 +689,6 @@ game:GetService("UserInputService").InputChanged:Connect(function(input)
 		sliderKnob.Position = UDim2.fromScale(percent, 0.5)
 		sliderFill.Size = UDim2.fromScale(percent, 1)
 		
-		-- 1 minute to 10 minutes
 		collectInterval = math.floor(60 + (percent * 540))
 		local minutes = math.floor(collectInterval / 60)
 		sliderLabel.Text = "Collect Interval: " .. minutes .. " minute" .. (minutes > 1 and "s" or "")
